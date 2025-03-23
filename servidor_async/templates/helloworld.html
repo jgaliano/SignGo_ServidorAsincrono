@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rocket Animation - Hello World</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #0a1128;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+        
+        .container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+        
+        .stars {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        
+        .star {
+            position: absolute;
+            background-color: white;
+            border-radius: 50%;
+        }
+        
+        .small-star {
+            width: 2px;
+            height: 2px;
+            opacity: 0.7;
+        }
+        
+        .medium-star {
+            width: 3px;
+            height: 3px;
+            opacity: 0.8;
+        }
+        
+        .large-star {
+            width: 4px;
+            height: 4px;
+            opacity: 1;
+        }
+        
+        .twinkle {
+            animation: twinkle 3s infinite ease-in-out;
+        }
+        
+        @keyframes twinkle {
+            0% { opacity: 0.2; }
+            50% { opacity: 1; }
+            100% { opacity: 0.2; }
+        }
+        
+        .rocket {
+            position: absolute;
+            top: 80%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 60px;
+            height: 120px;
+            animation: fly 6s infinite ease-in-out;
+        }
+        
+        @keyframes fly {
+            0% { transform: translate(-50%, 100%) rotate(0deg); }
+            20% { transform: translate(-53%, 50%) rotate(-3deg); }
+            40% { transform: translate(-48%, 10%) rotate(2deg); }
+            60% { transform: translate(-52%, -30%) rotate(-2deg); }
+            80% { transform: translate(-49%, -70%) rotate(1deg); }
+            100% { transform: translate(-50%, -120%) rotate(0deg); }
+        }
+        
+        .rocket-body {
+            position: absolute;
+            width: 60px;
+            height: 80px;
+            background: linear-gradient(90deg, #d13639, #ff4d4d, #d13639);
+            border-radius: 50% 50% 30% 30%;
+        }
+        
+        .window {
+            position: absolute;
+            top: 25px;
+            left: 20px;
+            width: 20px;
+            height: 20px;
+            background-color: #d1f5ff;
+            border-radius: 50%;
+            border: 3px solid #516b8a;
+        }
+        
+        .fin {
+            position: absolute;
+            bottom: 0;
+            width: 20px;
+            height: 30px;
+            background-color: #c13639;
+        }
+        
+        .fin.left {
+            left: -15px;
+            border-radius: 50% 0 0 0;
+            transform: skewY(30deg);
+        }
+        
+        .fin.right {
+            right: -15px;
+            border-radius: 0 50% 0 0;
+            transform: skewY(-30deg);
+        }
+        
+        .exhaust-flame {
+            position: absolute;
+            bottom: -40px;
+            left: 15px;
+            width: 30px;
+            height: 60px;
+            background: linear-gradient(to bottom, #ff9933, #ffcc00);
+            border-radius: 0 0 50% 50%;
+            animation: flame 0.2s infinite alternate;
+        }
+        
+        .exhaust-smoke {
+            position: absolute;
+            bottom: -50px;
+            left: 10px;
+            width: 40px;
+            height: 40px;
+            background-color: rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            animation: smoke 0.1s infinite alternate;
+        }
+        
+        @keyframes flame {
+            0% { height: 50px; opacity: 0.8; }
+            100% { height: 60px; opacity: 1; }
+        }
+        
+        @keyframes smoke {
+            0% { transform: scale(1); opacity: 0.3; }
+            100% { transform: scale(1.1); opacity: 0.5; }
+        }
+        
+        .hello-world {
+            position: absolute;
+            top: 20%;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            font-size: 32px;
+            font-weight: bold;
+            text-align: center;
+            opacity: 0;
+            animation: appear 6s infinite;
+        }
+        
+        @keyframes appear {
+            0% { opacity: 0; transform: translateX(-50%) translateY(50px); }
+            20% { opacity: 0; }
+            40% { opacity: 1; transform: translateX(-50%) translateY(0); }
+            80% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Estrellas -->
+        <div class="stars" id="stars"></div>
+        
+        <!-- Cohete -->
+        <div class="rocket">
+            <div class="rocket-body">
+                <div class="window"></div>
+            </div>
+            <div class="fin left"></div>
+            <div class="fin right"></div>
+            <div class="exhaust-flame"></div>
+            <div class="exhaust-smoke"></div>
+        </div>
+        
+        <!-- Texto Hello World -->
+        <div class="hello-world">
+            <div>Hello World!</div>
+        </div>
+    </div>
+    
+    <script>
+        // Crear estrellas dinámicamente
+        document.addEventListener("DOMContentLoaded", function() {
+            const starsContainer = document.getElementById('stars');
+            const starsCount = 150;
+            
+            for (let i = 0; i < starsCount; i++) {
+                const star = document.createElement('div');
+                star.classList.add('star');
+                
+                // Tamaño aleatorio de estrella
+                const size = Math.random();
+                if (size < 0.5) {
+                    star.classList.add('small-star');
+                } else if (size < 0.8) {
+                    star.classList.add('medium-star');
+                } else {
+                    star.classList.add('large-star');
+                }
+                
+                // Posición aleatoria
+                star.style.left = `${Math.random() * 100}%`;
+                star.style.top = `${Math.random() * 100}%`;
+                
+                // Hacer que algunas estrellas parpadeen
+                if (Math.random() > 0.7) {
+                    star.classList.add('twinkle');
+                    // Tiempo de animación aleatorio
+                    star.style.animationDuration = `${2 + Math.random() * 3}s`;
+                }
+                
+                starsContainer.appendChild(star);
+            }
+        });
+    </script>
+</body>
+</html>
