@@ -25,7 +25,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: don't run with debug turned on in production
 
-ALLOWED_HOSTS = ['192.168.10.142']
+ALLOWED_HOSTS = ['*', 'localhost', 'signgo.com.gt', '192.168.10.0/24', '3c48-190-242-50-170.ngrok-free.app']
 
 
 # Application definition
@@ -40,11 +40,14 @@ INSTALLED_APPS = [
     'servidor_async',
     'django_celery_results',
     'django_celery_beat',
+    'flujo_firma_async'
 ]
 
 # CONFIGURACIÓN DE REDIS PARA FIRMADO ASINCRONO
-CELERY_BROKER_URL = 'redis://localhost:6379/0'  # o 'amqp://guest:guest@localhost:5672/'
+CELERY_BROKER_URL = 'redis://localhost:6379/0' 
+# CELERY_BROKER_URL = 'redis://192.168.10.8:6379/0' # o 'amqp://guest:guest@localhost:5672/'
 CELERY_RESULT_BACKEND = 'django-db'
+
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
@@ -141,9 +144,54 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.1/howto/static-files/
 
-STATIC_URL = 'static/'
+STORAGES = {
+    "default": {
+        "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+        "OPTIONS": {
+            "access_key": env('AWS_ACCESS_KEY'),
+            "secret_key": env('AWS_SECRET_KEY'),
+            "bucket_name": env('AWS_BUCKET_NAME'),
+            "region_name": env('AWS_REGION_NAME'),
+            "querystring_auth": env('AWS_QUERYSTRING_AUTH'),
+            "custom_domain": env('AWS_CUSTOM_DOMAIN'),
+            "file_overwrite": env('AWS_FILE_OVERWRITE'),
+        },
+    },
+    "staticfiles": {
+        "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+        "OPTIONS": {
+            "access_key": env('AWS_ACCESS_KEY'),
+            "secret_key": env('AWS_SECRET_KEY'),
+            "bucket_name": env('AWS_BUCKET_NAME'),
+            "region_name": env('AWS_REGION_NAME'),
+            "querystring_auth": env('AWS_QUERYSTRING_AUTH'),
+            "custom_domain": env('AWS_CUSTOM_DOMAIN'),
+            "file_overwrite": env('AWS_FILE_OVERWRITE'),
+        },
+    },
+}
+
+STATIC_URL = "https://signgo-bucket.s3.us-east-2.amazonaws.com/static/servidor_asincrono/"
+
+MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_URL = '/media/'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+EMAIL_BACKEND = 'django_ses.SESBackend'
+EMAIL_HOST = 'email-smtp.us-east-2.amazonaws.com'
+EMAIL_PORT = 587  #
+AWS_DEFAULT_REGION = 'us-east-2'
+EMAIL_USE_TLS = True  
+EMAIL_USE_SSL = False  
+
+AWS_SES_ACCESS_KEY_ID = env('AWS_SES_ACCESS_KEY_ID')
+AWS_SES_SECRET_ACCESS_KEY = env('AWS_SES_SECRET_ACCESS_KEY')
+
+DEFAULT_FROM_EMAIL = 'notificaciones@signgo.com.gt'
+
+

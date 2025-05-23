@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plantilla de Correo Electrónico</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            border: 1px solid #dddddd;
+        }
+        .header {
+            background-color: rgb(1, 117, 212);
+            color: #ffffff;
+            padding: 20px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+        .content {
+            padding: 20px;
+            color: #333333;
+        }
+        .content p {
+            line-height: 1.6;
+        }
+        .footer {
+            background-color: #f4f4f4;
+            color: #777777;
+            text-align: center;
+            padding: 10px;
+            font-size: 12px;
+            border-top: 1px solid #dddddd;
+        }
+        .footer a {
+            color: rgb(1, 117, 212);
+            text-decoration: none;
+        }
+        .box{
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .videoid{
+            color: white;
+            text-decoration: none;
+            font-family: system-ui;
+            background-color: rgb(0, 82, 149);
+            height: 40px;
+            width: 150px;
+            border-radius: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+        }
+        label{
+            color: white;
+            font-family: system-ui;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>SignGo</h1>
+        </div>
+        <div class="content">
+            <h2>{{ asunto }}</h2>
+            <p>Estimado/a {{ nombre }},</p>
+            <p>{{ mensaje_correo }}</p><br>            
+            <div class="box">
+                <a class="videoid" id="a-firmar" href="{{ data }}"><label for="a-firmar">¡Ver!</label></a>
+            </div>
+            <p>
+                Atentamente,<br>
+                {{ nombre_remitente }}<br>
+                {{ nombre_empresa }}<br>
+            </p>
+        </div>
+        <div class="footer">
+            <p>SignGo © 2025. Todos los derechos reservados.</p>
+            <!-- <p><a href="https://www.uanataca.com">Visita nuestro sitio web</a></p> -->
+        </div>
+    </div>
+</body>
+</html>

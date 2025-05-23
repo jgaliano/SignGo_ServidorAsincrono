@@ -1,17 +1,45 @@
 from celery import shared_task
-from servidor_async.signbox_models import VitacoraFirmado, billingSignboxProd, task_asincrono, detalleFirma, webhookIP_Signbox, firma_asincrona, Imagen, PerfilSistema, LicenciasSistema, UsuarioSistema, signboxAPI, UserSigngo
+from servidor_async.signbox_models import VitacoraFirmado, billingSignboxProd, task_asincrono, detalleFirma, webhookIP_Signbox, firma_asincrona, Imagen, PerfilSistema, LicenciasSistema, UsuarioSistema, signboxAPI, UserSigngo, ArchivosPDFSignbox
 from django.http import JsonResponse
 import json
 from django.db.models import Q
 import requests
 import time
+from django.core.mail import send_mail
+from django.template.loader import render_to_string
+from django.utils.timezone import now
+from urllib.parse import urlparse
+from django.http import HttpResponse
+import zipfile
+import os
+from django.core.files.base import ContentFile
+import io
+from datetime import datetime
 
 
 @shared_task
 def tarea_asincrona(TokenEnvio):
+    
     get_task = task_asincrono.objects.using('signgo').get(transaccion_tarea=TokenEnvio)
-    procesar_documentos(TokenEnvio)
-    return 5
+    
+    if get_task.transaccion_tipo == 'Firma':
+        procesar_documentos(TokenEnvio)
+        get_task.estado = 'Finalizado'
+        get_task.save()
+        descontar_creditos(TokenEnvio)
+        enviar_correo("Proceso de firma completado", TokenEnvio)
+        return 'procesando documentos'
+    elif get_task.transaccion_tipo == 'empaquetar_archivos':
+        # OBTENER LA TAREA Y EL ID DEL ENVIO QUE HAY QUE ENCRIPTAR
+        archivos_to_encriptar = get_task.tx_task # CONTIENE EN TOKEN DEL ENVIO CON EL QUE SE ASOCÍAN LOS ARCHIVOS QUE SE FIRMARON
+        archivos_zip = encriptar_documentos(archivos_to_encriptar)
+        url_zip = guardar_archivo('media/archivos_zip/', 'documentos_historial', archivos_zip)
+        enviar_correo = enviar_correo_archivo_zip("archivo_zip", f'{get_task.usuario.first_name} {get_task.usuario.last_name}', get_task.usuario.email, url_zip, "Archivos listos para descarga", "Los archivos solicitados se han procesado con éxito y pueden descargarse desde el siguiente enlace")
+        get_task.estado = 'Finalizado'
+        get_task.save()     
+        return 'empaquetando documentos'
+    
+    return 'tipo de tarea no encontrado'
 
 def procesar_documentos(TokenEnvio):
     try:
@@ -314,7 +342,253 @@ def saveIDFile(nombreArchivo, tokenArchivo, tokenEnvio, estutusArchivo, usuarioE
         raise Exception(f'Error al guardar Bitacora de firmado: {e}')
 
 
-# try:
-#     return
-# except Exception as e:
-#     raise Exception(f' {e}')
+def descontar_creditos(TokenEnvio):
+    # CALCULO PARA DESCUENTO DE CREDITOS
+    archivo_firmados = []
+    archivos_enviados = VitacoraFirmado.objects.filter(TokenEnvio=TokenEnvio).order_by('-id')
+    for archivo in archivos_enviados:
+        getStatusFile = VitacoraFirmado.objects.get(IDArchivoAPI=archivo.IDArchivoAPI)
+        archivo_firmados.append(archivo.IDArchivoAPI) if getStatusFile.EstadoFirma == "Firmado" else None
+    cantidad_archivos_firmados = (len(archivo_firmados))
+        
+    usuario_licencia = get_usuario_firmante(TokenEnvio) 
+       
+    if cantidad_archivos_firmados > 0:    
+        validate_perfil = PerfilSistema.objects.get(usuario=UserSigngo.objects.get(id=usuario_licencia))
+        if validate_perfil.empresa == None:
+            validate_user = UsuarioSistema.objects.get(UsuarioGeneral=validate_perfil.usuario.pk)
+            licencia_usuario = LicenciasSistema.objects.filter(
+                Q(tipo='Firma Agil') | Q(tipo='CorporativoAuth') | Q(tipo='CorporativoOneshotAuth') |          
+                Q(tipo='CorporativoOneshotVideoAuth'),
+                usuario=validate_user.pk
+            ).last()
+            licencia_usuario.consumo = licencia_usuario.consumo + int(cantidad_archivos_firmados)
+        else:            
+            licencia_usuario = LicenciasSistema.objects.filter(
+                Q(tipo='Firma Agil') | Q(tipo='CorporativoAuth') | Q(tipo='CorporativoOneshotAuth') | 
+                Q(tipo='CorporativoOneshotVideoAuth'),
+                empresa=validate_perfil.empresa.id
+            ).order_by('-id').last()
+            licencia_usuario.consumo = licencia_usuario.consumo + int(cantidad_archivos_firmados)    
+        licencia_usuario.save()
+    return 5
+
+def enviar_correo(asunto_mail, url1):
+    try:
+        
+        get_user = VitacoraFirmado.objects.filter(TokenEnvio=url1).last()
+        
+        nombre_empresa = 'SignGo'
+        nombre_remitente = 'El equipo'
+           
+        url = f'https://signgo.com.gt/firma_agil/signDocs/{url1}'
+        
+        context = {
+            'data': url,
+            'nombre': f'{get_user.UsuarioFirmante.first_name} {get_user.UsuarioFirmante.last_name}',
+            'asunto': asunto_mail,
+            'nombre_remitente': nombre_remitente,
+            'nombre_empresa': nombre_empresa
+        }
+        
+        template_html = render_to_string('plantilla_correo.html', context)
+        
+        
+        destinatarios = [get_user.UsuarioFirmante.email]
+        send_mail(asunto_mail, '', "notificaciones@signgo.com.gt", destinatarios, fail_silently=False, html_message=template_html)
+        return json.dumps({"success": True, "data": "Enviado"})
+    except Exception as e:
+        print(f'send_mail: {e}')
+        return json.dumps({"success": False, "error": f'send_mail: {str(e)}'})
+
+
+def encriptar_documentos(documentos_to_encriptar):
+    try:
+        # OBTENER ARCHIVOS DE LA TRANSACCIÓN
+        get_files = VitacoraFirmado.objects.using('signgo').filter(
+            TokenEnvio=documentos_to_encriptar
+        ).order_by(
+            'NombreArchivo', 
+            '-id'
+        ).distinct(
+            'NombreArchivo'
+        )
+        
+        # OBTENER INDIVIDUALMENTE CADA URL
+        for documento in get_files:
+            # ACTUALIZAR CADA URL PREFIRMADA 
+            validar_link = validar_url_prefirmada(documento.TokenArchivo)
+            
+            if not validar_link == 'OK':
+                documento.url_archivo = validar_link
+                documento.save()
+         
+                
+        get_files = VitacoraFirmado.objects.using('signgo').filter(
+            TokenEnvio=documentos_to_encriptar
+        ).order_by(
+            'NombreArchivo', 
+            '-id'
+        ).distinct(
+            'NombreArchivo'
+        )
+        empaquetar_archivos = download_pdfs_and_zip(get_files)
+        return empaquetar_archivos
+    except Exception as e:
+        raise ValueError("No fue posible descargar los archivos")
+
+
+def validar_url_prefirmada(token_archivo):
+    try:
+        archivo = ArchivosPDFSignbox.objects.get(token_archivo=token_archivo)
+
+        if archivo.url_firmada_expiracion and archivo.url_firmada_expiracion > now():
+            return 'OK'
+            
+        nueva_url = archivo.get_presigned_url()
+        return nueva_url
+    
+    except ArchivosPDFSignbox.DoesNotExist:
+        return print(f'Archivo no encontrado')
+    
+    
+def download_pdfs_and_zip(queryset):
+    """
+    Función para descargar PDFs desde un queryset y generar un ZIP como bytes
+    """
+    try:
+        # Extraer URLs del queryset
+        urls = [documento.url_archivo for documento in queryset]
+        
+        if not urls:
+            return None
+        
+        # Crear ZIP en memoria como bytes
+        zip_buffer = io.BytesIO()
+        used_filenames = set()  # Para evitar nombres duplicados
+        
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            for i, url in enumerate(urls):
+                try:
+                    # Descargar PDF
+                    pdf_response = requests.get(url, timeout=30)
+                    pdf_response.raise_for_status()
+                    
+                    # Verificar que es un PDF
+                    content_type = pdf_response.headers.get('Content-Type', '')
+                    if 'pdf' not in content_type.lower():
+                        print(f"Advertencia: {url} no parece ser un PDF")
+                    
+                    # Obtener nombre único del archivo
+                    filename = get_unique_pdf_filename(url, pdf_response, i, used_filenames)
+                    used_filenames.add(filename)
+                    
+                    # Agregar PDF al ZIP
+                    zip_file.writestr(filename, pdf_response.content)
+                    
+                except Exception as e:
+                    print(f"Error descargando {url}: {str(e)}")
+                    continue
+        
+        # Obtener bytes del ZIP
+        zip_buffer.seek(0)
+        return zip_buffer.getvalue()
+        
+    except Exception as e:
+        print(f'Error: {str(e)}')
+        return None
+
+def get_unique_pdf_filename(url, response, index, used_filenames):
+    """
+    Extrae el nombre del archivo PDF y asegura que sea único
+    """
+    # Obtener nombre base
+    filename = get_pdf_filename(url, response, index)
+    
+    # Si el nombre ya existe, agregar contador
+    if filename in used_filenames:
+        name, ext = filename.rsplit('.', 1)
+        counter = 2
+        while f"{name}_{counter}.{ext}" in used_filenames:
+            counter += 1
+        filename = f"{name}_{counter}.{ext}"
+    
+    return filename
+
+
+def get_pdf_filename(url, response, index):
+    """
+    Extrae el nombre del archivo PDF
+    """
+    # Intentar obtener desde Content-Disposition
+    content_disposition = response.headers.get('Content-Disposition', '')
+    if 'filename=' in content_disposition:
+        import re
+        match = re.search(r'filename[^;=\n]*=(([\'"]).*?\2|[^;\n]*)', content_disposition)
+        if match:
+            filename = match.group(1).strip('"\'')
+            if filename.endswith('.pdf'):
+                return filename
+    
+    # Obtener desde la URL
+    parsed_url = urlparse(url)
+    filename = parsed_url.path.split('/')[-1]
+    
+    # Asegurar extensión .pdf
+    if not filename.endswith('.pdf'):
+        if '.' in filename:
+            filename = filename.rsplit('.', 1)[0] + '.pdf'
+        else:
+            filename = f"documento_{index + 1}.pdf"
+    
+    return filename
+
+
+def enviar_correo_archivo_zip(tipo_correo, nombre_remitente, destinatario, url, asunto, mensaje):
+    try:
+        
+        nombre_empresa = 'SignGo'
+        nombre_remitente = 'El equipo'
+        
+        context = {
+            'data': url,
+            'nombre': nombre_remitente,
+            'asunto': asunto,
+            'nombre_remitente': nombre_remitente,
+            'nombre_empresa': nombre_empresa,
+            'mensaje_correo': mensaje
+        }
+        
+        template_html = render_to_string('plantilla_correo.html', context)
+        
+        
+        destinatarios = [destinatario]
+        send_mail(asunto, '', "notificaciones@signgo.com.gt", destinatarios, fail_silently=False, html_message=template_html)
+        return json.dumps({"success": True, "data": "Enviado"})
+    except Exception as e:
+        print(f'send_mail: {e}')
+        return json.dumps({"success": False, "error": f'send_mail: {str(e)}'})
+    
+    
+def guardar_archivo(ruta, nombre_carpeta_save, archivo):
+    base_path = ruta
+    nombre_carpeta = nombre_carpeta_save
+    
+    # Asegurar que existe la carpeta
+    os.makedirs(os.path.join(os.path.abspath(os.getcwd()), base_path, nombre_carpeta), exist_ok=True)
+    # Guardar el documento en el bucket
+    nueva_archivo = ArchivosPDFSignbox()
+    nueva_archivo.set_upload_paths(base_path, nombre_carpeta)
+    
+    # Preparar el contenido del archivo
+    file_content = ContentFile(archivo)
+    
+    # Guardar el archivo en el bucket
+    now = datetime.now().strftime("%Y%m%d_%H%M%S")
+    nueva_archivo.archivo.save(f"Documentos_firmados_{now}.zip", file_content)
+    nueva_archivo.save()
+    
+    # Generar URL prefirmada
+    url_prefirmada = nueva_archivo.get_presigned_url()
+    print(url_prefirmada)
+    return url_prefirmada

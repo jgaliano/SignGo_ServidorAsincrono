@@ -15,11 +15,10 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import path
-from servidor_async import views
+from django.urls import path, include
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('helloworld/', views.helloworld, name="helloworld"),
-    path('tarea_async/', views.tarea_async, name="tarea_async"),
+    path('firma_agil/', include('servidor_async.urls')),
+    path('flujo_firma/', include('flujo_firma_async.urls')),
 ]

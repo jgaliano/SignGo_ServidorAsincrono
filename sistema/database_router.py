@@ -4,12 +4,12 @@ class DatabaseRouter:
     """
     
     def db_for_read(self, model, **hints):
-        if model._meta.app_label == 'signbox_replicas':
+        if model._meta.app_label == 'signgo_replicas':
             return 'signgo'
         return 'default'
     
     def db_for_write(self, model, **hints):
-        if model._meta.app_label == 'signbox_replicas':
+        if model._meta.app_label == 'signgo_replicas':
             return 'signgo'
         return 'default'
     
@@ -18,6 +18,6 @@ class DatabaseRouter:
     
     def allow_migrate(self, db, app_label, model_name=None, **hints):
         # Crucial: evita que Django intente migrar los modelos réplica
-        if app_label == 'signbox_replicas':
+        if app_label == 'signgo_replicas':
             return False
         return True

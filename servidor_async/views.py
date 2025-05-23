@@ -1,7 +1,7 @@
 from django.views.decorators.csrf import csrf_exempt
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render
-from .tasks import tarea_asincrona
+from . tasks import tarea_asincrona, encriptar_documentos
 import uuid
 from servidor_async.signbox_models import VitacoraFirmado, billingSignboxProd, task_asincrono, detalleFirma, webhookIP_Signbox, firma_asincrona, PerfilSistema
 import json
@@ -68,4 +68,14 @@ def actualizar_estado_tx(id, estado):
     except Exception as e:
         raise Exception(f"Error al actualizar estado: {str(e)}")
     return JsonResponse({'success': True,'data': 'Estado Actualizado'})
+
+
+
+##################################################################################################
+# FUNCIONES DE PRUEBA
+
+def prueba(request):
+    archivos = encriptar_documentos("bFOYdj81_wmBRgWvtKee_F4IPS-52JPYbA")
+    return archivos
+
 

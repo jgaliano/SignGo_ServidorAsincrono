@@ -1,0 +1,25 @@
+services:
+  asincrono_service:
+    image: jgalianoccg/signgo_system:servidor_asincrono_v1.0
+    container_name: async_server
+    restart: always
+    ports:
+      - '8088:8088'
+    networks:
+      - app_network
+  
+  celery_worker:
+    image: jgalianoccg/signgo_system:servidor_asincrono_v1.0
+    container_name: celery_worker
+    restart: always
+    command: celery -A sistema worker --loglevel=info --concurrency=2
+    depends_on:
+      - asincrono_service
+    networks:
+      - app_network
+    environment:
+      - DJANGO_SETTINGS_MODULE=sistema.settings
+
+networks:
+  app_network:
+    driver: bridge
